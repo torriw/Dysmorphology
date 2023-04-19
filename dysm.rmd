@@ -1,0 +1,134 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-04-03"
+---
+
+```{r set working directory }
+home<-setwd("C:/Users/torriw/Desktop/george")
+```
+
+```{r read in files }
+sample_id_list<-read.csv("C:/Users/torriw/Desktop/george/alc_con.csv")
+dysm_2<-read.csv("C:/Users/torriw/Desktop/george/CIFASDCRPhase2-DysmorphologyPhase2_DATA_2019-09-27_1310.csv")
+dysm_3<-read.csv("C:/Users/torriw/Desktop/george/CIFASDCRPhase3-DysmorphologyPhase3_DATA_2019-09-30_1020.csv")
+```
+
+
+```{r match sample id's }
+dysm2_match<-subset(dysm_2,subjectid %in% sample_id_list$subjectid)
+dysm3_match<-subset(dysm_3,subjectid %in% sample_id_list$subjectid)
+```
+
+
+```{r combine files and remove duplicates}
+combined_dem<-rbind(dysm3_match,dysm2_match)
+dups_rem<-combined_dem[!duplicated(combined_dem$subjectid),]
+```
+
+```{r write out file }
+write.csv(dups_rem,"C:/Users/torriw/Desktop/george/dysm_combined.csv")
+```
+
+
+
+####################################################################################################################
+
+
+
+```{r Directory for gwas}
+data_dir <- paste0( home, "/george_genome_gwas/chr_5_6/" )
+
+```
+
+```{r write out file }
+library(dplyr)  # For pipe %>%
+```
+
+```{r test parsing large linear/hybrid files }
+# TEST FILE
+# heightper<-read.delim("C:/Users/torriw/Desktop/george/george_genome_gwas/chr_1_2/plink2.heightper.glm.linear")
+# heightper<-heightper[heightper$TEST == "ADDxdemgroupclass=CON",]
+# heightper<-heightper[heightper$P < 0.003,]
+
+filenames <- list.files(path = data_dir,pattern = "*.linear", full.names = FALSE)
+
+# data sets are too large to parse, have to cut down size by setting parameters
+filtered_data<-data.frame()
+for (i in filenames){
+  dys<- read.csv( paste0( data_dir, i ), sep = "\t")
+  #add row of repeating dysm names so when the files are rbinded, I can distinguish their values & dysm names 
+  dys$Dysmorphology<-rep(stringr::str_remove(i, "plink2.") %>% stringr::str_remove(., ".glm.linear"),nrow(dys)) 
+  dys<-dys[dys$TEST == "ADDxdemgroupclass=CON" & dys$P < 0.00001,]
+  filtered_data<-rbind(filtered_data,dys)
+}
+write.csv(filtered_data,"C:/Users/torriw/Desktop/george/filtered_data/filtered_data_3_4.csv",row.names = F )
+a
+# create an empty data frame to store the results
+write_df <- data.frame()
+
+# create null variables to avoid issues with variable scoping and to ensure that the variables are empty before filling them with data. 
+p<-NULL
+id<-NULL
+statement<-NULL
+dysm<-NULL
+  for( j in unique(filtered_data$ID) ){
+    df_variant <- filtered_data[filtered_data$ID==j,]
+    x<-any(p.adjust( df_variant$P,method = "bonferroni") < 0.05 )
+    if( !any(which(df_variant$P < 0.05)) ){
+      next }
+    if( !isTRUE( x) ) {next}  # This is a check for Logical(0)
+    if( ! x){  
+      next
+    }
+    dysm<-paste(df_variant$Dysmorphology)
+    p<- paste(df_variant$P)
+    id<- paste(j)
+    statement<- paste(x)
+    ## MAKE A NEW ROW !! (using `nrow()+1`) ## Then adding data will be in sync with that row using `nrow()`
+    write_df[ nrow(write_df) + 1, 1 ] <- paste( dysm, collapse = " , " )
+    write_df[ nrow(write_df) , 2 ] <- paste( id, collapse = " , " )
+    write_df[ nrow(write_df) , 3 ] <- paste( p, collapse = " , " )
+    write_df[ nrow(write_df) , 4 ] <- paste( statement, collapse = " , " )
+  }
+
+# header names for final data frame
+names<-c("Dysmorphology","ID","P-value","Bonferroni Adj") 
+colnames(write_df)=names
+```
+
+```{r write out files}
+write.csv(write_df,"C:/Users/torriw/Desktop/george/Output/out_data_3_4.csv",row.names = FALSE)
+
+```
+
+```{r mart}
+BiocManager::install("biomaRt")
+library(biomaRt)
+#Mart used to map SNPs to Ensembl Gene IDs
+grch37.snp = useMart(biomart="ENSEMBL_MART_SNP", host="grch37.ensembl.org", path="/biomart/martservice",dataset="hsapiens_snp")
+
+#Mart used to map Ensembl Gene IDs to Gene name
+grch37 = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice", dataset="hsapiens_gene_ensembl")
+
+```
+
+```{r Mapping SNPs to Ensembl Gene IDs}
+table1 <- getBM(attributes = c("refsnp_id", "ensembl_gene_stable_id"), 
+                      filters = "snp_filter", 
+                      values = write_df$ID , 
+                      mart = grch37.snp)
+
+```
+
+```{r Mapping Ensembl Gene IDs to Gene names }
+# "ensembl_gene_id", "external_gene_name","external_gene_source","variation_name","start_position","end_position","description"
+
+table2 <- getBM(attributes = c("ensembl_gene_id","external_gene_name"),
+                 filters = "ensembl_gene_id", 
+                 values =  table1$ensembl_gene_stable_id, 
+                 mart = grch37)
+write.csv(table2,"C:/Users/torriw/Desktop/george/gene_lists/chr3_4_gene_list.csv",row.names = F)
+
+```
+
