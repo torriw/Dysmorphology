@@ -74,7 +74,7 @@ statement<-NULL
 dysm<-NULL
   for( j in unique(filtered_data$ID) ){
     df_variant <- filtered_data[filtered_data$ID==j,]
-    x<-any(p.adjust( df_variant$P,method = "bonferroni") < 0.05 )
+    x<-any(p.adjust( df_variant$P,method = "bonferroni", n = length(df_variant$P) < 0.05 )
     if( !any(which(df_variant$P < 0.05)) ){
       next }
     if( !isTRUE( x) ) {next}  # This is a check for Logical(0)
