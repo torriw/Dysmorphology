@@ -95,6 +95,11 @@ dysm<-NULL
 # header names for final data frame
 names<-c("Dysmorphology","ID","P-value","Bonferroni Adj") 
 colnames(write_df)=names
+
+# add on p adjusted values 
+Padj<- p.adjust(write_df$`P-value`,method = "bonferroni",n = length(write_df$`P-value`))
+write_df<-cbind(write_df,Padj)
+# NA's will possibly be introduced due to having rows with more than one p-value
 ```
 
 ```{r write out files}
